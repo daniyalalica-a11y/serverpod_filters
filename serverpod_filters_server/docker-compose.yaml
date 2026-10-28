@@ -1,0 +1,15 @@
+services:
+  # Test services
+  postgres_test:
+    image: ghcr.io/serverpod/postgres:16
+    ports:
+      - '9090:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: serverpod_filters_test
+      POSTGRES_PASSWORD: "DB_TEST_PASSWORD"
+    volumes:
+      - serverpod_filters_test_data:/var/lib/postgresql/data
+
+volumes:
+  serverpod_filters_test_data:

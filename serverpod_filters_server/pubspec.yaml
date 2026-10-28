@@ -1,0 +1,25 @@
+name: serverpod_filters_server
+description: >
+  High-performance, Odoo-style filter and sort engine for Serverpod 4.x.
+  Translates serializable filter expressions (Polish prefix notation, dot-notation
+  relational traversal, 14 operators) and rich sort specifications into native
+  Serverpod ORM Expressions and Orders — no raw SQL, no manual schema maintenance.
+
+version: 1.1.0
+homepage: https://github.com/your-org/serverpod_filters
+repository: https://github.com/your-org/serverpod_filters
+issue_tracker: https://github.com/your-org/serverpod_filters/issues
+
+environment:
+  sdk: '^3.12.2'
+
+resolution: workspace
+
+dependencies:
+  serverpod: 4.0.4
+
+dev_dependencies:
+  lints: '>=3.0.0 <7.0.0'
+  serverpod_database: 4.0.4
+  serverpod_test: 4.0.4
+  test: ^1.25.5
