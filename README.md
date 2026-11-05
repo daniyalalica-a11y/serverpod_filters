@@ -21,7 +21,7 @@ In your main Serverpod server project:
 
 ```yaml
 dependencies:
-  serverpod: 4.0.4
+  serverpod: ^4.1.0
   serverpod_filters_server:
     path: path/to/serverpod_filters/serverpod_filters_server
 ```
@@ -126,6 +126,22 @@ Each criterion is a 3-element list: `[field, operator, value]`.
 // Conditional equality (ignores criterion if value is null, false, or empty string)
 ['category', '=?', filterInput]
 ```
+
+### Compare columns
+
+Use an explicit `field` object as the value to compare two database columns.
+This keeps field references distinct from ordinary string values:
+
+```dart
+[
+  ['company_id', '=', {'field': 'user.company_id'}]
+]
+```
+
+The same shape works in JSON filters. `=`, `!=`, `>`, `>=`, `<`, and `<=` are
+supported; both columns must have the same Serverpod type. When filtering
+client-controlled input, include both column paths in `allowedFields` and use
+`strict: true`.
 
 ### 2. Related Object Fields (Dot Notation)
 Traverse through singular object relations defined in your Serverpod models:

@@ -151,6 +151,23 @@ class FilterExpressionTranslator {
     final op = leaf.operator;
     final val = leaf.value;
 
+    if (val is FilterColumnReference) {
+      if (allowedLower != null &&
+          !allowedLower.contains(val.field.toLowerCase())) {
+        if (strict) {
+          throw FilterValidationException(
+            'Filtering on field "${val.field}" is not allowed. '
+            'Allowed fields: ${allowedLower.join(', ')}',
+            field: val.field,
+          );
+        }
+        return Constant.bool(true);
+      }
+
+      final valueColumn = columnResolver.resolveColumn(table, val.field);
+      return _applyColumnComparison(column, valueColumn, op);
+    }
+
     // Operator =? (conditional equals): if value is null/empty/false, evaluates
     // to TRUE (a no-op that matches all rows). Otherwise applies standard equality.
     if (op == FilterOperator.conditionalEquals) {
@@ -194,6 +211,38 @@ class FilterExpressionTranslator {
     };
   }
 
+  Expression _applyColumnComparison(
+    Column column,
+    Column valueColumn,
+    FilterOperator operator,
+  ) {
+    if (column is! ColumnComparable || valueColumn is! ColumnComparable) {
+      throw UnsupportedError(
+        'Columns ${column.columnName} and ${valueColumn.columnName} do not support comparisons',
+      );
+    }
+    if (column.type != valueColumn.type) {
+      throw ArgumentError(
+        'Cannot compare columns ${column.columnName} (${column.type}) and '
+        '${valueColumn.columnName} (${valueColumn.type}) with different types',
+      );
+    }
+
+    final sqlOperator = switch (operator) {
+      FilterOperator.equals => '=',
+      FilterOperator.notEquals => '!=',
+      FilterOperator.greaterThan => '>',
+      FilterOperator.greaterThanOrEqual => '>=',
+      FilterOperator.lessThan => '<',
+      FilterOperator.lessThanOrEqual => '<=',
+      _ => throw ArgumentError(
+        'Operator "${operator.symbol}" cannot compare columns',
+      ),
+    };
+
+    return _ColumnComparisonExpression(column, sqlOperator, valueColumn);
+  }
+
   Expression _applyEquals(Column column, dynamic value) {
     try {
       return (column as dynamic).equals(value) as Expression;
@@ -220,11 +269,29 @@ class FilterExpressionTranslator {
     Expression Function(dynamic col, dynamic val) op,
   ) {
     if (column is ColumnComparable) {
-      return op(column, value);
+      return op(column, _coerceComparisonValue(column, value));
     }
     throw UnsupportedError(
       'Column ${column.columnName} of type ${column.type} does not support ordering comparisons',
     );
+  }
+
+  dynamic _coerceComparisonValue(Column column, dynamic value) {
+    if (column is ColumnInt && value is num && value is! int) {
+      if (!value.isFinite || value != value.truncateToDouble()) {
+        throw ArgumentError(
+          'Expected an integer value for column "${column.columnName}", '
+          'got $value',
+        );
+      }
+      return value.toInt();
+    }
+
+    if (column is ColumnDouble && value is num) {
+      return value.toDouble();
+    }
+
+    return value;
   }
 
   Expression _applyInSet(Column column, dynamic value) {
@@ -377,4 +444,15 @@ class FilterExpressionTranslator {
       'Column ${column.columnName} is not a ColumnString (cannot use =ilike)',
     );
   }
+}
+
+class _ColumnComparisonExpression extends Expression<String> {
+  _ColumnComparisonExpression(Column left, String operator, Column right)
+    : _columns = [left, right],
+      super('${left.toString()} $operator ${right.toString()}');
+
+  final List<Column> _columns;
+
+  @override
+  List<Column> get columns => _columns;
 }

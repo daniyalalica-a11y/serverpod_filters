@@ -1,5 +1,24 @@
 import 'filter_operator.dart';
 
+/// Explicit reference to another database column used as a filter value.
+///
+/// JSON filters can represent this as `{'field': 'user.companyId'}`.
+final class FilterColumnReference {
+  const FilterColumnReference(this.field);
+
+  final String field;
+
+  @override
+  String toString() => 'column($field)';
+
+  @override
+  bool operator ==(Object other) =>
+      other is FilterColumnReference && field == other.field;
+
+  @override
+  int get hashCode => field.hashCode;
+}
+
 /// Visitor pattern interface for traversing and transforming the filter AST.
 abstract interface class FilterVisitor<R, C> {
   R visitCriterion(FilterCriterion criterion, C context);

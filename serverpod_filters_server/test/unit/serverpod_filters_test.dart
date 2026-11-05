@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:serverpod/serverpod.dart';
 // ignore: implementation_imports
+import 'package:serverpod_database/src/adapters/postgres/sql_query_builder.dart';
+// ignore: implementation_imports
 import 'package:serverpod_database/src/adapters/postgres/value_encoder.dart';
 import 'package:serverpod_filters_server/serverpod_filters_server.dart';
 import 'package:test/test.dart';
@@ -113,6 +115,34 @@ void main() {
             value: 'draft',
           ),
         ),
+      );
+    });
+
+    test('parses an explicit column reference value', () {
+      final node = parser.parse(
+        jsonDecode(
+          '[["company_id", "=", {"field": "customer.company_id"}]]',
+        ),
+      );
+
+      expect(node, isA<FilterCriterion>());
+      final criterion = node as FilterCriterion;
+      expect(
+        criterion.value,
+        const FilterColumnReference('customer.company_id'),
+      );
+    });
+
+    test('rejects column references with non-comparison operators', () {
+      expect(
+        () => parser.parse([
+          [
+            'state',
+            'in',
+            {'field': 'customer.state'},
+          ],
+        ]),
+        throwsA(isA<FilterParseException>()),
       );
     });
 
@@ -232,6 +262,114 @@ void main() {
         expect(sqlString, contains('"order"."amount" >='));
       },
     );
+
+    test('compares a column with a related column', () {
+      final expression = ServerpodFilters.toWhere(
+        [
+          [
+            'customer_id',
+            '=',
+            {'field': 'customer.id'},
+          ],
+        ],
+        table,
+        allowedFields: {'customer_id', 'customer.id'},
+        strict: true,
+      );
+
+      expect(
+        expression.toString(),
+        equals(
+          '"order"."customer_id" = "order_customer_client"."id"',
+        ),
+      );
+      expect(expression.columns, hasLength(2));
+      expect(expression.columns.last.table.tableRelation, isNotNull);
+
+      final sql = SelectQueryBuilder(
+        table: table,
+      ).withWhere(expression).build();
+      expect(sql, contains('JOIN "client" AS "order_customer_client"'));
+      expect(
+        sql,
+        contains(
+          'WHERE "order"."customer_id" = "order_customer_client"."id"',
+        ),
+      );
+    });
+
+    test('supports every comparison operator for column references', () {
+      for (final operator in ['=', '!=', '>', '>=', '<', '<=']) {
+        final expression = ServerpodFilters.toWhere(
+          [
+            [
+              'customer_id',
+              operator,
+              {'field': 'customer.id'},
+            ],
+          ],
+          table,
+        );
+
+        expect(expression.toString(), contains(' $operator '));
+      }
+    });
+
+    test('non-strict allowlist applies to referenced columns too', () {
+      final expression = ServerpodFilters.toWhere(
+        [
+          [
+            'customer_id',
+            '=',
+            {'field': 'customer.id'},
+          ],
+        ],
+        table,
+        allowedFields: {'customer_id'},
+      );
+
+      expect(expression.toString(), equals('TRUE'));
+    });
+
+    test('requires both compared columns in strict allowlists', () {
+      expect(
+        () => ServerpodFilters.toWhere(
+          [
+            [
+              'customer_id',
+              '=',
+              {'field': 'customer.id'},
+            ],
+          ],
+          table,
+          allowedFields: {'customer_id'},
+          strict: true,
+        ),
+        throwsA(
+          isA<FilterValidationException>().having(
+            (error) => error.field,
+            'field',
+            'customer.id',
+          ),
+        ),
+      );
+    });
+
+    test('rejects column comparisons between different types', () {
+      expect(
+        () => ServerpodFilters.toWhere(
+          [
+            [
+              'customer_id',
+              '=',
+              {'field': 'state'},
+            ],
+          ],
+          table,
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
 
     test('coerces JSON integer comparisons for ColumnDouble', () {
       final filter = jsonDecode('[["amount", ">", 1000]]');

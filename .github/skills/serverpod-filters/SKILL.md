@@ -78,6 +78,18 @@ characters; `like` and `ilike` accept patterns such as `Acme%` and `%corp%`.
 The parser does not accept arbitrary map-based filter formats or Odoo domains.
 Adapt other client formats to this grammar before calling the library.
 
+To compare two columns, use an explicit `field` object as the right-hand value:
+
+```dart
+[
+  ['companyId', '=', {'field': 'user.companyId'}],
+]
+```
+
+This supports `=`, `!=`, `>`, `>=`, `<`, and `<=` when both columns have the
+same Serverpod type. For client-controlled input, include both column paths in
+`allowedFields`; strict validation applies to the left and right columns.
+
 ## Related fields
 
 Dot notation traverses singular object relations, for example

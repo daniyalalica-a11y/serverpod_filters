@@ -188,7 +188,7 @@ class FilterParser {
 
     final rawField = criterion[0];
     final rawOp = criterion[1];
-    final value = criterion[2];
+    final value = _parseValue(criterion[2], index, criterion);
 
     // Boolean tautology shortcuts: (1, '=', 1) or (0, '=', 1)
     if (rawField == 1 && rawOp == '=' && value == 1) {
@@ -215,21 +215,7 @@ class FilterParser {
     }
 
     final field = rawField.trim();
-    if (field.isEmpty) {
-      throw FilterParseException(
-        'Criterion field cannot be empty',
-        index: index,
-        element: criterion,
-      );
-    }
-
-    if (!_validFieldPattern.hasMatch(field)) {
-      throw FilterParseException(
-        'Invalid field identifier "$field". Field names must consist of alphanumeric characters/underscores and dot notation.',
-        index: index,
-        element: criterion,
-      );
-    }
+    _validateField(field, index: index, element: criterion);
 
     if (rawOp is! String) {
       throw FilterParseException(
@@ -259,11 +245,59 @@ class FilterParser {
       );
     }
 
+    if (value is FilterColumnReference &&
+        op != FilterOperator.equals &&
+        op != FilterOperator.notEquals &&
+        !op.isComparison) {
+      throw FilterParseException(
+        'Column references can only be used with comparison operators',
+        index: index,
+        element: criterion,
+      );
+    }
+
     return FilterCriterion(
       field: field,
       operator: op,
       value: value,
     );
+  }
+
+  dynamic _parseValue(dynamic value, int index, List<dynamic> criterion) {
+    if (value is! Map || !value.containsKey('field')) return value;
+    if (value.length != 1 || value['field'] is! String) {
+      throw FilterParseException(
+        'Column reference values must be an object with a single string "field" property',
+        index: index,
+        element: criterion,
+      );
+    }
+
+    final field = (value['field'] as String).trim();
+    _validateField(field, index: index, element: criterion);
+    return FilterColumnReference(field);
+  }
+
+  void _validateField(
+    String field, {
+    required int index,
+    required dynamic element,
+  }) {
+    if (field.isEmpty) {
+      throw FilterParseException(
+        'Filter field cannot be empty',
+        index: index,
+        element: element,
+      );
+    }
+
+    if (!_validFieldPattern.hasMatch(field)) {
+      throw FilterParseException(
+        'Invalid field identifier "$field". Field names must consist of alphanumeric characters/underscores and dot notation.',
+        index: index,
+        element: element,
+      );
+    }
   }
 }
 
